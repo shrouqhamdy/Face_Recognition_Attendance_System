@@ -55,7 +55,7 @@ def initialize_dlib():
     detector = dlib.get_frontal_face_detector() 
 
     # this func returns the 68 facial landmarks which contains 12 eye landmarks
-    predictor = dlib.shape_predictor("/home/khalid/Desktop/p1-tagrib/Face_Recognition_Attendance_System/shape_predictor_68_face_landmarks.dat") 
+    predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat") 
     return detector,predictor
 
 
