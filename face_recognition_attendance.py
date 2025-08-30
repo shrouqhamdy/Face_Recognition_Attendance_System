@@ -5,7 +5,12 @@ import numpy as np
 import csv
 import os
 from datetime import datetime
+# libraries for blink detection
+import dlib
+from scipy.spatial import distance as dist
 
+# initialize the frame counters ( how many  consec frames the eye is closed )
+COUNTER = 0 
 
 def load_known_faces(photos_path="photos"):
     """Load face encodings and names from a folder of images."""
@@ -27,6 +32,33 @@ def load_known_faces(photos_path="photos"):
     return known_face_encodings, known_faces_names
 
 
+def eye_aspect_ratio(eye : list[int]):
+    ''' computes the ear of each eye individually by taking the coordinates of the six points of the eye '''
+    # compute the euclidean distances between the two sets of vertical eye landmarks (x, y)-coordinates
+    A = dist.euclidean(eye[1], eye[5])
+    B = dist.euclidean(eye[2], eye[4])
+
+    # compute the euclidean distance between the horizontal eye landmark (x, y)-coordinates
+    C = dist.euclidean(eye[0], eye[3])
+
+    # compute the eye aspect ratio
+    ear = (A + B) / (2.0 * C)
+
+    # return the eye aspect ratio
+    return ear
+
+def initialize_dlib():
+    ''' statrting detector functions '''
+    print("[INFO] loading facial landmark predictor...")
+
+    # this func returns the bounding box coordinates for each face (left,top,right,bottom) 
+    detector = dlib.get_frontal_face_detector() 
+
+    # this func returns the 68 facial landmarks which contains 12 eye landmarks
+    predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat") 
+    return detector,predictor
+
+
 def create_attendance_file():
     """Create a CSV file for today's attendance and return the writer."""
     now = datetime.now()
@@ -35,6 +67,45 @@ def create_attendance_file():
     writer = csv.writer(file)
     return file, writer
 
+# initialize the detector functions
+detector , predictor = initialize_dlib()
+
+
+def check_blink(frame):
+    global COUNTER
+    gray_frame = cv2.cvtColor(frame,cv2.COLOR_RGB2GRAY)
+    faces = detector(gray_frame,0)
+    for face in faces :
+
+        # determine the facial landmarks for the face region, then convert the facial landmark (x, y)-coordinates to a NumPy array
+        shape = predictor(gray_frame,face)
+
+        # (part(i)) is a methode that return the specific landmark by index i
+        shape = [(shape.part(i).x, shape.part(i).y) for i in range(0, 68)] 
+
+        # extract the left and right eye coordinates
+        leftEye = shape[42:48]
+        rightEye = shape[36:42]
+
+        # compute the eye aspect ratio for both eyes
+        leftEAR = eye_aspect_ratio(leftEye)
+        rightEAR = eye_aspect_ratio(rightEye)
+
+        # average the eye aspect ratio together for both eyes
+        ear = (leftEAR + rightEAR) / 2.0
+        
+        # this checks if the eye is closed it will increas the counter and will return false because it still isn't a blink
+        if ear <0.2 : 
+            COUNTER += 1
+            return False
+        
+        # if the code reach hear this means that the eye is opend and will check does the eye closed for specific number of frames ,if not then it is just a wrong measure
+        else :
+            if COUNTER >5 : 
+                COUNTER = 0
+                return True
+            COUNTER = 0
+            return False
 
 def process_frame(frame, known_face_encodings, known_faces_names, students, writer):
     """Process one frame: detect faces, recognize them, and mark attendance."""
@@ -73,8 +144,9 @@ def process_frame(frame, known_face_encodings, known_faces_names, students, writ
 def run_attendance_system():
     """Main loop for face recognition attendance system."""
     # Load known faces
-    known_face_encodings, known_faces_names = load_known_faces("../../Desktop/new file/photos")
+    known_face_encodings, known_faces_names = load_known_faces()
     students = known_faces_names.copy()
+
 
     # Create attendance file
     file, writer = create_attendance_file()
@@ -86,9 +158,10 @@ def run_attendance_system():
         ret, frame = video_capture.read()
         if not ret:
             break
+        if check_blink(frame):
 
-        # Process frame and update attendance
-        process_frame(frame, known_face_encodings, known_faces_names, students, writer)
+            # Process frame and update attendance
+            process_frame(frame, known_face_encodings, known_faces_names, students, writer)
 
         # Display the video feed
         cv2.imshow("Attendance System", frame)
