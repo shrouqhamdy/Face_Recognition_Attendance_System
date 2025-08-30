@@ -1,4 +1,5 @@
 # Import required libraries
+import fileinput
 import face_recognition
 import cv2
 import numpy as np
@@ -8,9 +9,11 @@ from datetime import datetime
 # libraries for blink detection
 import dlib
 from scipy.spatial import distance as dist
+import requests  # For sending the attendance file via Discord Webhook
 
 # initialize the frame counters ( how many  consec frames the eye is closed )
-COUNTER = 0 
+COUNTER = 0
+
 
 def load_known_faces(photos_path="photos"):
     """Load face encodings and names from a folder of images."""
@@ -47,25 +50,28 @@ def eye_aspect_ratio(eye : list[int]):
     # return the eye aspect ratio
     return ear
 
+
 def initialize_dlib():
     ''' statrting detector functions '''
     print("[INFO] loading facial landmark predictor...")
 
-    # this func returns the bounding box coordinates for each face (left,top,right,bottom) 
-    detector = dlib.get_frontal_face_detector() 
+    # this func returns the bounding box coordinates for each face (left,top,right,bottom)
+    detector = dlib.get_frontal_face_detector()
 
     # this func returns the 68 facial landmarks which contains 12 eye landmarks
-    predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat") 
-    return detector,predictor
+    predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
+    return detector, predictor
 
 
 def create_attendance_file():
     """Create a CSV file for today's attendance and return the writer."""
     now = datetime.now()
     current_date = now.strftime("%Y-%m-%d")
+    filename = current_date + ".csv"
     file = open(current_date + ".csv", "w+", newline='')
     writer = csv.writer(file)
-    return file, writer
+    return file, writer, filename
+
 
 # initialize the detector functions
 detector , predictor = initialize_dlib()
@@ -73,15 +79,15 @@ detector , predictor = initialize_dlib()
 
 def check_blink(frame):
     global COUNTER
-    gray_frame = cv2.cvtColor(frame,cv2.COLOR_RGB2GRAY)
-    faces = detector(gray_frame,0)
-    for face in faces :
+    gray_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+    faces = detector(gray_frame, 0)
+    for face in faces:
 
         # determine the facial landmarks for the face region, then convert the facial landmark (x, y)-coordinates to a NumPy array
-        shape = predictor(gray_frame,face)
+        shape = predictor(gray_frame, face)
 
         # (part(i)) is a methode that return the specific landmark by index i
-        shape = [(shape.part(i).x, shape.part(i).y) for i in range(0, 68)] 
+        shape = [(shape.part(i).x, shape.part(i).y) for i in range(0, 68)]
 
         # extract the left and right eye coordinates
         leftEye = shape[42:48]
@@ -93,19 +99,20 @@ def check_blink(frame):
 
         # average the eye aspect ratio together for both eyes
         ear = (leftEAR + rightEAR) / 2.0
-        
+
         # this checks if the eye is closed it will increas the counter and will return false because it still isn't a blink
-        if ear <0.2 : 
+        if ear < 0.2:
             COUNTER += 1
             return False
-        
+
         # if the code reach hear this means that the eye is opend and will check does the eye closed for specific number of frames ,if not then it is just a wrong measure
-        else :
-            if COUNTER >5 : 
+        else:
+            if COUNTER > 5:
                 COUNTER = 0
                 return True
             COUNTER = 0
             return False
+
 
 def process_frame(frame, known_face_encodings, known_faces_names, students, writer):
     """Process one frame: detect faces, recognize them, and mark attendance."""
@@ -141,15 +148,27 @@ def process_frame(frame, known_face_encodings, known_faces_names, students, writ
     return face_names
 
 
+def send_discord_file(file_path):
+    """Send the attendance CSV file to Discord using a webhook."""
+    webhook_url = "YOUR_WEBHOOK_URL"  # Replace with your Discord webhook URL
+    with open(file_path, "rb") as f:
+        files = {"file": f}
+        response = requests.post(webhook_url, files=files)
+
+    if response.status_code == 204:
+        print("CSV file successfully sent to Discord.")
+    else:
+        print("Failed to send file:", response.text)
+
+
 def run_attendance_system():
     """Main loop for face recognition attendance system."""
     # Load known faces
     known_face_encodings, known_faces_names = load_known_faces()
     students = known_faces_names.copy()
 
-
     # Create attendance file
-    file, writer = create_attendance_file()
+    file, writer, filename = create_attendance_file()
 
     # Initialize webcam
     video_capture = cv2.VideoCapture(0)
@@ -159,7 +178,6 @@ def run_attendance_system():
         if not ret:
             break
         if check_blink(frame):
-
             # Process frame and update attendance
             process_frame(frame, known_face_encodings, known_faces_names, students, writer)
 
@@ -174,6 +192,8 @@ def run_attendance_system():
     video_capture.release()
     cv2.destroyAllWindows()
     file.close()
+    # Send the attendance file to Discord after closing the system
+    send_discord_file(filename)
 
 
 if __name__ == "__main__":
