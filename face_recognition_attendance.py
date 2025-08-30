@@ -386,8 +386,7 @@ def process_frame(frame, known_face_encodings, known_faces_names, students, writ
 
         if matches[best_match_index]:
             name = known_faces_names[best_match_index]
-
-        face_names.append(name)
+            face_names.append(name)
 
         if name in students:
             students.remove(name)
