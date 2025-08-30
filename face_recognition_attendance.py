@@ -17,6 +17,9 @@ import tkinter as tk
 from tkinter import ttk, messagebox, Tk
 from PIL import Image, ImageTk
 
+# Replace with your Discord webhook URL
+webhook_url = "YOUR_WEBHOOK_URL"
+
 # Global variables
 root = tk.Tk()
 table = None
@@ -42,7 +45,7 @@ timer_id = None
 COUNTER = 0
 frame_count = 0
 
-
+face_names = []
 # ---------------- Functions ----------------
 
 def setup_gui():
@@ -99,7 +102,7 @@ def setup_gui():
     tk.Button(root, text="End Lecture", font=("Arial", 9),
               bg="#7155FF", fg="white", command=end_lecture).place(x=185, y=278, width=80)
 
-    tk.Button(root, text="End Day & Send", font=("Arial", 9),
+    tk.Button(root, text="End Day", font=("Arial", 9),
               bg="#7155FF", fg="white", command=end_day).place(x=105, y=325, width=100)
 
 
@@ -145,7 +148,6 @@ def add_lecture():
 
     schedule.append({'subject': subject, 'start_time': start_time})
     schedule.sort(key=lambda x: x['start_time'])
-
     table.delete(*table.get_children())
     for lecture in schedule:
         table.insert("", "end", values=(lecture['subject'], lecture['start_time'].strftime("%H:%M")))
@@ -157,26 +159,30 @@ def add_lecture():
     # Clear the entry
     subject_entry.delete(0, tk.END)
     start_time_entry.delete(0, tk.END)
-    check_schedule()
 
 
 def check_schedule():
-    """Check the schedule every second and start the lecture when its time comes."""
     global current_lecture_index, schedule, root, timer_id
 
-    if current_lecture_index >= len(schedule):
+    # If no lectures left
+    if not schedule:
         print("All lectures completed.")
         return
+
+    # Make sure index is in range
+    if current_lecture_index >= len(schedule):
+        current_lecture_index = 0
 
     current_time = datetime.now().time()
     current_lecture = schedule[current_lecture_index]
 
+    # If it's time for the lecture, start it
     if current_time >= current_lecture['start_time']:
         start_lecture()
-        current_lecture_index += 1
-
-    # Repeat every second
-    timer_id = root.after(1000, check_schedule)
+    else:
+        # Wait for the next check
+        print(f"Waiting for lecture: {current_lecture['subject']} at {current_lecture['start_time']}")
+        timer_id = root.after(1000, check_schedule)
 
 
 def start_lecture():
@@ -186,7 +192,7 @@ def start_lecture():
         return
     current = schedule[current_lecture_index]
     current_lecture_label.config(text=f"Current Lecture: {current['subject']}")
-
+    print(current_lecture_index,"\t",len(schedule))
     table.pack_forget()
     camera_label.lift()
 
@@ -209,7 +215,7 @@ def update_camera_frame(frame):
 
 
 def end_lecture():
-    global video_capture, camera_label, table, writer, attendance_file, lecture_count
+    global video_capture, camera_label, table, writer, attendance_file, lecture_count, current_lecture_index
 
     if video_capture and video_capture.isOpened():
         video_capture.release()
@@ -218,8 +224,9 @@ def end_lecture():
         attendance_file.close()
         writer = None
         attendance_file = None
+
         # Remove the current lecture from schedule
-        if current_lecture_index <= len(schedule):
+        if current_lecture_index < len(schedule):
             schedule.pop(current_lecture_index)
             lecture_count = len(schedule)
             lecture_count_label.config(text=f"Lectures Today: {lecture_count}")
@@ -228,22 +235,33 @@ def end_lecture():
             table.delete(*table.get_children())
             for lecture in schedule:
                 table.insert("", "end", values=(lecture['subject'], lecture['start_time'].strftime("%H:%M")))
+
+        # Reset index if out of range
+        if current_lecture_index >= len(schedule):
+            current_lecture_index = 0
+
     cv2.destroyAllWindows()
     camera_label.lower()
     table.pack(fill="both", expand=True)
     print("Lecture ended.")
+    current_lecture_label.config(text="Current lecture: None")
+    send_discord_file(filename)
     check_schedule()
 
 
 def start_day():
-    # fill it
+    if not schedule:
+        print("Error, Add at least one lecture")
+        return
     print("Starting the day...")
     check_schedule()
 
 
+
 def end_day():
-    #fill it
     print("Ending the day & sending attendance...")
+    cv2.destroyAllWindows()
+    root.destroy()
 
 
 def play_sound_file(sound_file='short_success.mp3'):
@@ -297,16 +315,16 @@ def initialize_dlib():
 
 
 def create_attendance_file():
-    """Create a CSV file for today's attendance and return the writer."""
+    """Create a CSV file for today's lecture attendance and return the writer."""
     now = datetime.now()
     current_date = now.strftime("%Y-%m-%d")
-    filename = current_date + ".csv"
-    file = open(current_date + ".csv", "w+", newline='')
+    filename = current_date+ schedule[current_lecture_index]['subject'] + ".csv" 
+    file = open(filename, "w+", newline='')
     writer = csv.writer(file)
     return file, writer, filename
 
 # initialize the detector functions
-detector, predictor = initialize_dlib()
+detector, predictor = initialize_dlib()# initialize the detector functions
 
 
 def check_blink(frame):
@@ -333,7 +351,7 @@ def check_blink(frame):
         ear = (leftEAR + rightEAR) / 2.0
 
         # this checks if the eye is closed it will increas the counter and will return false because it still isn't a blink
-        if ear < 0.2:
+        if ear < 0.23:
             COUNTER += 1
             return False
 
@@ -383,7 +401,6 @@ def process_frame(frame, known_face_encodings, known_faces_names, students, writ
 
 def send_discord_file(file_path):
     """Send the attendance CSV file to Discord using a webhook."""
-    webhook_url = "YOUR_WEBHOOK_URL"  # Replace with your Discord webhook URL
     with open(file_path, "rb") as f:
         files = {"file": f}
         response = requests.post(webhook_url, files=files)
@@ -396,7 +413,7 @@ def send_discord_file(file_path):
 
 def run_attendance_system():
     """Main loop for face recognition attendance system."""
-    global video_capture, camera_label, known_face_encodings, known_faces_names, students, writer, attendance_file
+    global video_capture, camera_label, known_face_encodings, known_faces_names, students, writer, attendance_file, filename,face_names
     if video_capture is None or not video_capture.isOpened():
         print("Camera not initialized or failed to open")
         return
@@ -405,6 +422,7 @@ def run_attendance_system():
     students = known_faces_names.copy()
     # Create attendance file
     attendance_file, writer, filename = create_attendance_file()
+    
 
     while video_capture and video_capture.isOpened():
         ret, frame = video_capture.read()
@@ -413,11 +431,11 @@ def run_attendance_system():
             break
         if check_blink(frame):
             # Process frame and update attendance
-            process_frame(frame, known_face_encodings, known_faces_names, students, writer)
+            face_names = process_frame(frame, known_face_encodings, known_faces_names, students, writer)  #the studendts who attend along the day
+            attendee_count_label.config(text=f'Attendees Today: {len(face_names)}')
         update_camera_frame(frame)
         root.update()  # Keep Tkinter responsive
 
-        # Exit on ESC key
         if cv2.waitKey(1) & 0xFF == 27:
             break
 
