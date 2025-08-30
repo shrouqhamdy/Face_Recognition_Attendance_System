@@ -10,6 +10,11 @@ from datetime import datetime
 import dlib
 from scipy.spatial import distance as dist
 import requests  # For sending the attendance file via Discord Webhook
+from playsound import playsound  # For playing the audio files
+
+def play_sound_file(sound_file='short_success.mp3'):
+    ''' playing the audio file '''
+    playsound(sound_file)
 
 # initialize the frame counters ( how many  consec frames the eye is closed )
 COUNTER = 0
@@ -74,7 +79,7 @@ def create_attendance_file():
 
 
 # initialize the detector functions
-detector , predictor = initialize_dlib()
+detector, predictor = initialize_dlib()
 
 
 def check_blink(frame):
@@ -144,6 +149,7 @@ def process_frame(frame, known_face_encodings, known_faces_names, students, writ
             print(name, "is present")
             current_time = now.strftime("%H-%M-%S")
             writer.writerow([name, current_time])
+            play_sound_file()
 
     return face_names
 
