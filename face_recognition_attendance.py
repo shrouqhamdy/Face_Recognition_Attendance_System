@@ -6,19 +6,20 @@ import csv
 import os
 from datetime import datetime
 
-# libraries for blink detection
+# Libraries for blink detection
 import dlib
 from scipy.spatial import distance as dist
 import requests
 from playsound import playsound
 
-#GUI libraries
+# GUI libraries
 import tkinter as tk
-from tkinter import ttk, messagebox, Tk
+from tkinter import ttk, messagebox
 from PIL import Image, ImageTk
 
 # Replace with your Discord webhook URL
 webhook_url = "YOUR_WEBHOOK_URL"
+photos_path = "photos"
 
 # Global variables
 root = tk.Tk()
@@ -29,63 +30,57 @@ lecture_count_label = None
 attendee_count_label = None
 current_lecture_label = None
 camera_label = None
-
-schedule = []
-current_lecture_index = 0
-lecture_count = 0
-attendee_count = 0
-
+new_name_entry = None
+btn_new_student = None
+btn_save = None
 video_capture = None
-known_face_encodings = []
-known_faces_names = []
-students = []
+face_encoding = None
 writer = None
 attendance_file = None
 timer_id = None
+
+schedule = []
+known_face_encodings = []
+known_faces_names = []
+face_names = []
+students = []
+
+current_lecture_index = 0
+lecture_count = 0
+attendee_count = 0
 COUNTER = 0
 frame_count = 0
 
-face_names = []
+
 # ---------------- Functions ----------------
 
 def setup_gui():
-    global subject_entry, start_time_entry, lecture_count_label, attendee_count_label, current_lecture_label, table, camera_label
+    """Setup the main GUI layout and widgets."""
+    global subject_entry, start_time_entry, lecture_count_label, current_lecture_label, \
+        table, camera_label, attendee_count_label, new_name_entry, btn_save, btn_new_student
 
     root.title("Attendance System")
     root.geometry("700x400")
     root.resizable(False, False)
 
     # --- Right side inputs ---
-    tk.Label(root, text="Lecture Name:",
-             font=("Arial", 9),
-             width=16,
-             height=1,
-             relief="solid",
-             bd=0,
-             highlightbackground="#8C75FF",
-             highlightthickness=1).place(x=30, y=30)
+    tk.Label(root, text="Lecture Name:", font=("Arial", 9),
+             width=16, height=1, relief="solid",bd=0,
+             highlightbackground="#8C75FF", highlightthickness=2).place(x=30, y=30)
 
     subject_entry = tk.Entry(root, width=20, font=("Arial", 9))
     subject_entry.place(x=160, y=30)
 
-    tk.Label(root, text="Start Time (HH:MM):",
-             font=("Arial", 9),
-             width=16,
-             height=1,
-             relief="solid",
-             bd=0,
-             highlightbackground="#8C75FF",
-             highlightthickness=1).place(x=30, y=60)
+    tk.Label(root, text="Start Time (HH:MM):", font=("Arial", 9),
+             width=16, height=1, relief="solid",bd=0,
+             highlightbackground="#8C75FF", highlightthickness=2).place(x=30, y=60)
 
     start_time_entry = tk.Entry(root, width=20, font=("Arial", 9))
     start_time_entry.place(x=160, y=60)
 
     # Buttons
-    tk.Button(root, text="Add Lecture",
-              font=("Arial", 9),
-              bg="#7155FF",
-              fg="white",
-              command=add_lecture).place(x=115, y=95)
+    tk.Button(root, text="Add Lecture", font=("Arial", 9),
+              bg="#7155FF", fg="white", command=add_lecture).place(x=115, y=95)
 
     lecture_count_label = tk.Label(root, text="Lectures Today: 0")
     lecture_count_label.place(x=30, y=150)
@@ -105,25 +100,93 @@ def setup_gui():
     tk.Button(root, text="End Day", font=("Arial", 9),
               bg="#7155FF", fg="white", command=end_day).place(x=105, y=325, width=100)
 
-
     # --- Left side: Table for schedule ---
-    table_frame = tk.Frame(root,width=300,height=350)
+    table_frame = tk.Frame(root, width=300, height=350)
     table_frame.place(x=350, y=25)
     table_frame.pack_propagate(False)
 
     table = ttk.Treeview(table_frame, columns=("Subject", "Start Time"), show="headings")
     table.heading("Subject", text="Lecture Name")
     table.heading("Start Time", text="Start Time")
-    table.column("Subject", width=150,)
+    table.column("Subject", width=150)
     table.column("Start Time", width=150)
     table.pack(fill="both", expand=True)
 
     camera_label = tk.Label(root)
-    camera_label.place(x=350, y=25,width=300,height=350)
+    camera_label.place(x=350, y=25, width=300, height=300)
     camera_label.lower()
+
+    btn_new_student = tk.Button(root, text="New Student", font=("Arial", 9),
+                                bg="#7155FF", fg="white", command=register)
+    btn_new_student.place_forget()
+
+    new_name_entry = tk.Entry(root, width=15, font=("Arial", 12))
+    new_name_entry.place_forget()
+
+    btn_save = tk.Button(root, text="Save", font=("Arial", 9),
+                         bg="#7155FF", fg="white", command=save_func)
+    btn_save.place_forget()
+
+
+def save_func():
+    """Save a new student's face after verifying it doesn't already exist."""
+    global new_name_entry, btn_save, video_capture, known_face_encodings, known_faces_names
+
+    new_name = new_name_entry.get().strip()
+    if not new_name:
+        messagebox.showwarning("Input required", "Please enter the student's name first.")
+        return
+    if f"{new_name}.jpg" in os.listdir(photos_path):
+        messagebox.showerror("Error", "This name already exists!")
+        return
+    if video_capture is None or not video_capture.isOpened():
+        messagebox.showerror("Error", "Camera is not opened!")
+        return
+    ret, frame = video_capture.read()
+    if not ret:
+        messagebox.showerror("Error", "Failed to capture photo from camera!")
+        return
+
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    face_encodings_list = face_recognition.face_encodings(rgb_frame)
+
+    if not face_encodings_list:
+        messagebox.showerror("Error", "No face detected! Please try again.")
+        return
+
+    face_encoding = face_encodings_list[0]
+    if known_face_encodings:
+        matches = face_recognition.compare_faces(known_face_encodings, face_encoding, tolerance=0.5)
+        if True in matches:
+            messagebox.showerror("Error", "This student face already exists!")
+            return
+
+    os.makedirs(photos_path, exist_ok=True)
+    img_path = os.path.join(photos_path, f"{new_name}.jpg")
+    cv2.imwrite(img_path, frame)
+    messagebox.showinfo("Success", f"The photo for {new_name} has been saved in {photos_path}")
+
+    known_face_encodings.append(face_encoding)
+    known_faces_names.append(new_name)
+
+    new_name_entry.place_forget()
+    btn_save.place_forget()
+    new_name_entry.delete(0, tk.END)
+
+    if new_name not in students:
+        students.append(new_name)
+
+
+def register():
+    """Prepare the UI for registering a new student."""
+    global video_capture
+    if video_capture and video_capture.isOpened():
+        new_name_entry.place(x=456, y=354)
+        btn_save.place(x=604, y=350)
 
 
 def add_lecture():
+    """Add a new lecture to the daily schedule."""
     global lecture_count
     subject = subject_entry.get().strip()
     start_time_str = start_time_entry.get().strip()
@@ -143,7 +206,8 @@ def add_lecture():
 
     for lecture in schedule:
         if lecture['start_time'] == start_time:
-            messagebox.showerror("Duplicate Time", f"A lecture is already scheduled at {start_time.strftime('%H:%M')}")
+            messagebox.showerror("Duplicate Time",
+                                 f"A lecture is already scheduled at {start_time.strftime('%H:%M')}")
             return
 
     schedule.append({'subject': subject, 'start_time': start_time})
@@ -152,16 +216,15 @@ def add_lecture():
     for lecture in schedule:
         table.insert("", "end", values=(lecture['subject'], lecture['start_time'].strftime("%H:%M")))
 
-    # Update lecture counter
     lecture_count = len(schedule)
     lecture_count_label.config(text=f"Lectures Today: {lecture_count}")
 
-    # Clear the entry
     subject_entry.delete(0, tk.END)
     start_time_entry.delete(0, tk.END)
 
 
 def check_schedule():
+    """Check the schedule and start the next lecture when its time arrives."""
     global current_lecture_index, schedule, root, timer_id
 
     # If no lectures left
@@ -169,7 +232,6 @@ def check_schedule():
         print("All lectures completed.")
         return
 
-    # Make sure index is in range
     if current_lecture_index >= len(schedule):
         current_lecture_index = 0
 
@@ -183,18 +245,23 @@ def check_schedule():
         # Wait for the next check
         print(f"Waiting for lecture: {current_lecture['subject']} at {current_lecture['start_time']}")
         timer_id = root.after(1000, check_schedule)
+        return
 
 
 def start_lecture():
-    global current_lecture_index, current_lecture_label, table, camera_label, video_capture
+    """Start the current lecture by opening the camera and launching attendance tracking."""
+    global current_lecture_index, current_lecture_label, table, camera_label, video_capture, btn_new_student
+
     if current_lecture_index >= len(schedule):
         print("No more lectures to start.")
         return
+    table.pack_forget()
+    camera_label.lift()
+    btn_new_student.place(x=350, y=350, width=100)
+
     current = schedule[current_lecture_index]
     current_lecture_label.config(text=f"Current Lecture: {current['subject']}")
     print(current_lecture_index,"\t",len(schedule))
-    table.pack_forget()
-    camera_label.lift()
 
     video_capture = cv2.VideoCapture(0)
     if not video_capture.isOpened():
@@ -215,7 +282,9 @@ def update_camera_frame(frame):
 
 
 def end_lecture():
-    global video_capture, camera_label, table, writer, attendance_file, lecture_count, current_lecture_index
+    """End the current lecture, reset attendance, and send the file to Discord."""
+    global video_capture, camera_label, table, writer, attendance_file, lecture_count, \
+        current_lecture_index, btn_new_student, btn_save, new_name_entry, attendee_count
 
     if video_capture and video_capture.isOpened():
         video_capture.release()
@@ -244,9 +313,16 @@ def end_lecture():
     camera_label.lower()
     table.pack(fill="both", expand=True)
     print("Lecture ended.")
-    current_lecture_label.config(text="Current lecture: None")
+
+    attendee_count = 0
+    attendee_count_label.config(text="Attendees Today: 0")
     send_discord_file(filename)
     check_schedule()
+
+    btn_new_student.place_forget()
+    btn_save.place_forget()
+    new_name_entry.place_forget()
+
 
 
 def start_day():
@@ -255,7 +331,6 @@ def start_day():
         return
     print("Starting the day...")
     check_schedule()
-
 
 
 def end_day():
@@ -269,7 +344,8 @@ def play_sound_file(sound_file='short_success.mp3'):
 
 
 def load_known_faces(photos_path="photos",):
-
+    known_face_encodings.clear()
+    known_faces_names.clear()
     for filename in os.listdir(photos_path):
         if filename.endswith((".jpg", ".jpeg", ".png")):
             img_path = os.path.join(photos_path, filename)
@@ -285,28 +361,21 @@ def load_known_faces(photos_path="photos",):
     return known_face_encodings, known_faces_names
 
 
-
 def eye_aspect_ratio(eye: list[int]):
     ''' computes the ear of each eye individually by taking the coordinates of the six points of the eye '''
-    # compute the euclidean distances between the two sets of vertical eye landmarks (x, y)-coordinates
+
     A = dist.euclidean(eye[1], eye[5])
     B = dist.euclidean(eye[2], eye[4])
-
-    # compute the euclidean distance between the horizontal eye landmark (x, y)-coordinates
     C = dist.euclidean(eye[0], eye[3])
 
     # compute the eye aspect ratio
     ear = (A + B) / (2.0 * C)
-
-    # return the eye aspect ratio
     return ear
 
 
 def initialize_dlib():
-    ''' statrting detector functions '''
+    """Initialize dlib's face detector and landmark predictor."""
     print("[INFO] loading facial landmark predictor...")
-
-    # this func returns the bounding box coordinates for each face (left,top,right,bottom)
     detector = dlib.get_frontal_face_detector()
 
     # this func returns the 68 facial landmarks which contains 12 eye landmarks
@@ -318,7 +387,7 @@ def create_attendance_file():
     """Create a CSV file for today's lecture attendance and return the writer."""
     now = datetime.now()
     current_date = now.strftime("%Y-%m-%d")
-    filename = current_date+ schedule[current_lecture_index]['subject'] + ".csv" 
+    filename = current_date+ schedule[current_lecture_index]['subject'] + ".csv"
     file = open(filename, "w+", newline='')
     writer = csv.writer(file)
     return file, writer, filename
@@ -350,12 +419,10 @@ def check_blink(frame):
         # average the eye aspect ratio together for both eyes
         ear = (leftEAR + rightEAR) / 2.0
 
-        # this checks if the eye is closed it will increas the counter and will return false because it still isn't a blink
         if ear < 0.23:
             COUNTER += 1
             return False
 
-        # if the code reach hear this means that the eye is opend and will check does the eye closed for specific number of frames ,if not then it is just a wrong measure
         else:
             if COUNTER > 5:
                 COUNTER = 0
@@ -366,6 +433,7 @@ def check_blink(frame):
 
 def process_frame(frame, known_face_encodings, known_faces_names, students, writer):
     """Process one frame: detect faces, recognize them, and mark attendance."""
+    global  frame_count, face_names, face_encodings, attendee_count
     now = datetime.now()
 
     # Resize frame to 1/4 size for performance
@@ -374,8 +442,11 @@ def process_frame(frame, known_face_encodings, known_faces_names, students, writ
 
     face_locations = face_recognition.face_locations(rgb_small_frame)
     face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
-
     face_names = []
+
+    if not known_face_encodings:
+        print("No known faces loaded. Please register students first.")
+        return face_names
 
     for face_encoding in face_encodings:
         matches = face_recognition.compare_faces(known_face_encodings, face_encoding)
@@ -394,6 +465,7 @@ def process_frame(frame, known_face_encodings, known_faces_names, students, writ
             current_time = now.strftime("%H-%M-%S")
             writer.writerow([name, current_time])
             play_sound_file()
+            attendee_count +=1
 
     return face_names
 
@@ -412,16 +484,18 @@ def send_discord_file(file_path):
 
 def run_attendance_system():
     """Main loop for face recognition attendance system."""
-    global video_capture, camera_label, known_face_encodings, known_faces_names, students, writer, attendance_file, filename,face_names
+    global video_capture, camera_label, known_face_encodings, known_faces_names,\
+        students, writer, attendance_file, filename,face_names, attendee_count
+
     if video_capture is None or not video_capture.isOpened():
         print("Camera not initialized or failed to open")
         return
     #load known faces
     known_face_encodings, known_faces_names = load_known_faces()
-    students = known_faces_names.copy()
+    students = []
+    students.extend(known_faces_names)
     # Create attendance file
     attendance_file, writer, filename = create_attendance_file()
-    
 
     while video_capture and video_capture.isOpened():
         ret, frame = video_capture.read()
@@ -430,10 +504,11 @@ def run_attendance_system():
             break
         if check_blink(frame):
             # Process frame and update attendance
-            face_names = process_frame(frame, known_face_encodings, known_faces_names, students, writer)  #the studendts who attend along the day
-            attendee_count_label.config(text=f'Attendees Today: {len(face_names)}')
+            face_names = process_frame(frame, known_face_encodings, known_faces_names, students, writer)
+            attendee_count_label.config(text=f'Attendees Today: {attendee_count}')
+
         update_camera_frame(frame)
-        root.update()  # Keep Tkinter responsive
+        root.update()
 
         if cv2.waitKey(1) & 0xFF == 27:
             break
