@@ -4,59 +4,73 @@ This project is a Python-based Face Recognition Attendance System designed for e
 
 ## Features
 
-- Face recognition and liveness detection (blink check)
-- Lecture scheduling and CSV attendance logs
-- GUI for easy management
-- Discord webhook notification
-
-## Requirements
-
-- Python 3.x
-- All dependencies listed in `requirements.txt`
-- Dlib shape predictor model (`shape_predictor_68_face_landmarks.dat`)
-- Discord webhook URL (set in the script)
+- **Real-time Face Recognition:** Detects and recognizes faces via camera feed.
+- **Automated Attendance Logging:** Marks attendance and records it in a CSV file.
+- **User-Friendly Interface:** Easy-to-use GUI for starting/stopping attendance, viewing logs, and notifications.
+- **Attendance Notification:** Notifies users upon successful attendance registration.
+- **User Registration:** Easily add new users by registering their face directly through the application interface.
 
 ## Quick Start
 
-1. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-2. Download and place the Dlib model in your project folder.
-3. Add face images to the `photos/` directory.
-4. Set your Discord webhook URL in `face_recognition_attendance.py`.
-5. Run:
-   ```bash
-   python face_recognition_attendance.py
-   ```
+1. **Install Requirements**
+   ```
+   pip install -r requirements.txt
+   ```
+2. **Run the Application**
+   ```
+   python face_recognition_attendance.py
+   ```
+3. **Add Face Photos**
+   - Place reference photos of users in the `photos/` directory.
+   - Or use the **registration feature** to capture and register new user faces from the app interface.
 
-## Usage
+## Usage Screenshots
 
-- Use the GUI to add lectures and manage the schedule.
-- Attendance is marked automatically for recognized and attentive faces (blink detected).
-- After each lecture, a CSV log is saved and sent to your Discord channel.
+### Main Interface
+![Main Window](https://github.com/shrouqhamdy/Face_Recognition_Attendance_System/blob/main/screenshots/main_window.jpg)
 
-## Screenshots
+### Before and After Adding Lectures
 
-### Main Window After Adding Lectures
-![Main Window](screenshots/main_window.jpg)
+| Before Recognition | After Recognition |
+|--------------------|-------------------|
+| ![Before](https://github.com/shrouqhamdy/Face_Recognition_Attendance_System/blob/main/screenshots/before.jpg) | ![After](https://github.com/shrouqhamdy/Face_Recognition_Attendance_System/blob/main/screenshots/after.jpg) |
 
-
-### Before and After Face Recognition
-
-| Before Recognition               | After Attendance Is Marked        |
-|:--------------------------------:|:---------------------------------:|
-| ![](screenshots/before.png)      | ![](screenshots/after.jpg)        |
 
 ### Attendance Notification
-![Discord Notification](screenshots/attendance_notification.jpg)
+![Attendance Notification](https://github.com/shrouqhamdy/Face_Recognition_Attendance_System/blob/main/screenshots/attendance_notification.jpg)
 
 ### Attendance CSV File Example
-![Attendance CSV](screenshots/csv_file.jpg)
+![CSV File Sample](https://github.com/shrouqhamdy/Face_Recognition_Attendance_System/blob/main/screenshots/csv_file.jpg)
+
+### User Registration Success
+When a new student registers, such as Khalid, a confirmation message appears:
+
+![Registration Success Example](https://github.com/shrouqhamdy/Face_Recognition_Attendance_System/blob/main/screenshots/registration_success.jpg)
+
+## User Registration
+
+- **Register New Users:**  
+Use the registration button in the interface to add a new user. The system will prompt you to capture the user's face and input their name. The new user will be added to the attendance system automatically and their photo will be saved in the `photos` directory.
+
+## File Overview
+
+- `face_recognition_attendance.py`: Main script for running the system.
+- `requirements.txt`: Python dependencies.
+- `photos/`: Directory for users' face images.
+- `screenshots/`: Sample UI and results.
+- `shape_predictor_68_face_landmarks.dat`: Model file for facial landmarks detection.
+- `short_success.mp3`: Audio notification for successful attendance.
+
+## Notes
+
+- The application uses dlib and OpenCV for face detection and recognition.
+- Make sure your camera is properly connected for live recognition.
+
+---
 
 ## Authors
 
-- [shrouqhamdy](https://github.com/shrouqhamdy)  
+- [shrouqhamdy](https://github.com/shrouqhamdy)  
 - [khalidashraf630](https://github.com/khalidashraf630)
 
 ---
