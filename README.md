@@ -21,8 +21,9 @@ This project is a Python-based Face Recognition Attendance System designed for e
    python face_recognition_attendance.py
    ```
 3. **Add Face Photos**
-   - Place reference photos of users in the `photos/` directory.
-   - Or use the **registration feature** to capture and register new user faces from the app interface.
+   - Place reference photos of users in the `photos/` directory.  
+   - Or use the **registration feature** to capture and register new user faces from the app interface.
+
 
 ## Usage Screenshots
 
