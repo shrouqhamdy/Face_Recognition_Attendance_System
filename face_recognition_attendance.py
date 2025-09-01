@@ -402,7 +402,7 @@ def check_blink(frame):
     faces = detector(gray_frame, 0)
     for face in faces:
 
-        # determine the facial landmarks for the face region, then convert the facial landmark (x, y)-coordinates to a NumPy array
+        # determine the facial landmarks for the face region
         shape = predictor(gray_frame, face)
 
         # (part(i)) is a methode that return the specific landmark by index i
