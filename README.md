@@ -27,10 +27,10 @@ This project is a Python-based Face Recognition Attendance System designed for e
 
 ## Usage Screenshots
 
-### Main Interface
+### Main Interface After Adding Lectures
 ![Main Window](https://github.com/shrouqhamdy/Face_Recognition_Attendance_System/blob/main/screenshots/main_window.jpg)
 
-### Before and After Adding Lectures
+### Before and After Recognition
 
 | Before Recognition | After Recognition |
 |--------------------|-------------------|
